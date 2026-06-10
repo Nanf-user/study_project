@@ -1,0 +1,22 @@
+{
+  "codename": "myfont",
+  "ttf_path": "/assets/FONT/iconfont.ttf",
+  "bin_path": "/assets/FONT\\ui_font_myfont.bin",
+  "c_path": "/assets/FONT\\ui_font_myfont.c",
+  "cfg_path": "/assets/FONT\\ui_font_myfont.fcfg",
+  "size": 20,
+  "bpp": 1,
+  "letters": 0,
+  "ranges": [
+    "0xe600",
+    " 0xec4a",
+    " 0xec17",
+    " 0xe76c",
+    "0xe63f",
+    "0xe634",
+    "0xe873"
+  ],
+  "symbols": "",
+  "customparams": "--no-compress --no-prefilter",
+  "uploaded": false
+}

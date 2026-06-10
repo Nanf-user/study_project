@@ -29,6 +29,7 @@
 
 /* Includes ------------------------------------------------------------------*/
 #include "stm32f4xx_it.h"
+#include "lvgl.h"
  
 
 /** @addtogroup Template_Project
@@ -141,7 +142,22 @@ void PendSV_Handler(void)
   */
 void SysTick_Handler(void)
 {
- 
+
+}
+
+/**
+  * @brief  This function handles TIM7 global interrupt request.
+  *         Provides 1ms tick for LVGL.
+  * @param  None
+  * @retval None
+  */
+void TIM7_IRQHandler(void)
+{
+    if (TIM_GetITStatus(TIM7, TIM_IT_Update) != RESET)
+    {
+        TIM_ClearITPendingBit(TIM7, TIM_IT_Update);
+        lv_tick_inc(1);
+    }
 }
 
 /******************************************************************************/

@@ -1,4 +1,5 @@
 #include "mylcd.h"
+//#include "w25q64.h"  /* W25Q64 SPI flash - not used for LVGL */
 #include "stdlib.h"
 #include "string.h"
 #include "stdio.h"
@@ -28,7 +29,7 @@ void ReadWrite(uint8_t ByteSend){
 	#endif
 }
 
-static void ST7789_WR_DATA8(uint16_t da){ 
+void ST7789_WR_DATA8(uint16_t da){ 
 	#if ENABLE_CS
 		OLED_CS(0);
 	#endif
@@ -63,6 +64,30 @@ static void ST7789_WR_DATA(int da){
 		OLED_CS(1);
 	#endif
 }
+/**
+ * Write a single 16-bit RGB565 color pixel to the LCD.
+ * Must call ST7789_Cursor() first to set the write window.
+ * This is the public wrapper used by LVGL's flush callback.
+ */
+void ST7789_WriteColor(uint16_t color) {
+#if ENABLE_CS
+    OLED_CS(0);
+#endif
+#if Fast_Mode
+    GPIOB->BSRR = DC_Pin(10);  /* PB10=1, Data mode */
+#else
+    OLED_DC(1);
+#endif
+    ReadWrite(color >> 8);
+    ReadWrite(color & 0xFF);
+#if !SoftWare_SPI
+    while (SPI_I2S_GetFlagStatus(ST7789_HSPI, SPI_I2S_FLAG_BSY) == SET);
+#endif
+#if ENABLE_CS
+    OLED_CS(1);
+#endif
+}
+
 static void ST7789_WR_REG(uint16_t da)	 {
 	#if ENABLE_CS
 		OLED_CS(0);
@@ -91,7 +116,7 @@ void ST7789_HSPI_Init(SPI_TypeDef* SPIx)
         RCC_APB2PeriphClockCmd(RCC_APB2Periph_SPI1, ENABLE);
         RCC_AHB1PeriphClockCmd(RCC_AHB1Periph_GPIOA, ENABLE);
 
-        GPIO_InitStructure.GPIO_Pin = GPIO_Pin_5 | GPIO_Pin_6 | GPIO_Pin_7;
+        GPIO_InitStructure.GPIO_Pin = GPIO_Pin_5 | GPIO_Pin_6 | GPIO_Pin_7;        //PA5-SCL,PA6-MOSO,PA7-MOSI
         GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF;
         GPIO_InitStructure.GPIO_Speed = GPIO_Speed_100MHz;
         GPIO_InitStructure.GPIO_OType = GPIO_OType_PP;
@@ -125,7 +150,7 @@ void ST7789_HSPI_Init(SPI_TypeDef* SPIx)
     SPI_InitStructure.SPI_CPOL = SPI_CPOL_High;
     SPI_InitStructure.SPI_CPHA = SPI_CPHA_2Edge;
     SPI_InitStructure.SPI_NSS = SPI_NSS_Soft;
-    SPI_InitStructure.SPI_BaudRatePrescaler = SPI_BaudRatePrescaler_8;   
+    SPI_InitStructure.SPI_BaudRatePrescaler = SPI_BaudRatePrescaler_8;
     SPI_InitStructure.SPI_FirstBit = SPI_FirstBit_MSB;
     SPI_InitStructure.SPI_CRCPolynomial = 7;
 
@@ -191,10 +216,12 @@ void ST7789_Init(uint16_t Back_color,uint16_t Pen_color){
 	
 	
 	ST7789_WR_REG(0x36);
-	if(USE_HORIZONTAL==0)ST7789_WR_DATA8(0x00);
+	
+	if(USE_HORIZONTAL==0)ST7789_WR_DATA8(0x00);        //st7789
 	else if(USE_HORIZONTAL==1)ST7789_WR_DATA8(0xC0);
 	else if(USE_HORIZONTAL==2)ST7789_WR_DATA8(0x70);
 	else ST7789_WR_DATA8(0xA0);
+
 
 	ST7789_WR_REG(0x3A); 
 	ST7789_WR_DATA8(0x05);
@@ -263,7 +290,7 @@ void ST7789_Init(uint16_t Back_color,uint16_t Pen_color){
 	ST7789_WR_DATA8(0x20);
 	ST7789_WR_DATA8(0x23);
 
-	ST7789_WR_REG(0x21); 
+	ST7789_WR_REG(0x20); 
 
 	ST7789_WR_REG(0x11); 
 	for(i =0;i<5000;i++)__NOP();
@@ -710,32 +737,76 @@ void LCD_ShowPicture(u16 x,u16 y,u16 length,u16 width,const u8 pic[])
 	}			
 }
 
-//void LCD_ShowImage_FromFlash(uint16_t x, uint16_t y,
-//                             uint16_t width, uint16_t height,
-//                             uint32_t flash_addr)
-//{
-//    uint16_t i, j;
-//    uint8_t buf[240 * 2];   // 最大一行（按240开）
+#if 0  /* Requires W25Q64 SPI flash driver — disabled for LVGL only project */
 
-//    for (j = 0; j < height; j++)
-//    {
-//        // 读取一行数据
-//        W25Q64_ReadData(flash_addr + j * width * 2, buf, width * 2);
+void LCD_ShowImage_FromFlash(uint16_t x, uint16_t y,
+                             uint16_t width, uint16_t height,
+                             uint32_t flash_addr)
+{
+    uint16_t i, j;
+    uint8_t buf[240 * 2];   // 最大一行（按240开）
 
-//        // 设置窗口（只一行）
-//        ST7789_Cursor(x, y + j, x + width - 1, y + j);
+    for (j = 0; j < height; j++)
+    {
+        // 读取一行数据
+        W25Q64_ReadData(flash_addr + j * width * 2, buf, width * 2);
 
-//        for (i = 0; i < width; i++)
-//        {
-//            // 与 LCD_ShowPicture 保持一致的字节序（低字节在前）
-//            ST7789_WR_DATA8(buf[i*2+1]);
-//            ST7789_WR_DATA8(buf[i*2]);
-//        }
-//    }
-//}
+        // 设置窗口（只一行）
+        ST7789_Cursor(x, y + j, x + width - 1, y + j);
 
+        for (i = 0; i < width; i++)
+        {
+            // 与 LCD_ShowPicture 保持一致的字节序（低字节在前）
+            ST7789_WR_DATA8(buf[i*2+1]);
+            ST7789_WR_DATA8(buf[i*2]);
+        }
+    }
+}
 
+/* 纵取模（列优先）图片显示，用于 Img2LCD 生成的垂直扫描数据 */
+void LCD_ShowImage_VerScan(uint16_t x, uint16_t y,
+                            uint16_t width, uint16_t height,
+                            uint32_t flash_addr)
+{
+    uint16_t i, j;
+    uint8_t buf[320 * 2];   // 最大一列（按320开）
 
+    for (i = 0; i < width; i++)
+    {
+        // 读取一列数据：从右到左（模式0x1B bit4=1）
+        W25Q64_ReadData(flash_addr + (uint32_t)(width - 1 - i) * height * 2, buf, height * 2);
 
+        // 设置窗口（只一列）
+        ST7789_Cursor(x + i, y, x + i, y + height - 1);
+
+        for (j = 0; j < height; j++)
+        {
+            ST7789_WR_DATA8(buf[j*2+1]);
+            ST7789_WR_DATA8(buf[j*2]);
+        }
+    }
+}
+
+#endif /* Requires W25Q64 SPI flash driver */
+
+/**
+ * Bulk write RGB565 pixels — optimized for LVGL flush.
+ * Must call ST7789_Cursor() first to set the write window.
+ */
+void ST7789_BulkWrite(const uint16_t *colors, uint32_t count)
+{
+    SPI_TypeDef *spi = ST7789_HSPI;
+    volatile uint8_t *dr = (volatile uint8_t *)&spi->DR;
+
+    OLED_DC(1);
+    while (count--) {
+        uint16_t c = *colors++;
+        while (!(spi->SR & SPI_I2S_FLAG_TXE));
+        *dr = c >> 8;          /* MSB first */
+        while (!(spi->SR & SPI_I2S_FLAG_TXE));
+        *dr = c & 0xFF;        /* LSB second */
+    }
+    while (spi->SR & SPI_I2S_FLAG_BSY);
+}
 
 

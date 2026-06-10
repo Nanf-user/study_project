@@ -31,3 +31,5 @@ Desktop.ini
 # Misc
 *.pyc
 __pycache__/
+*.zip
+log.txt
